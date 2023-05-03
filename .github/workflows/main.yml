@@ -1,0 +1,54 @@
+name: CI/CD Workflow
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  AWS_REGION: us-west-2
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v2
+      with:
+        node-version: 14
+
+  build:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+    - name: Build SPA
+      run: npm run build
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        role-to-assume: arn:aws:iam::323082814469:role/stack_of_containerd_papermc_service
+        role-session-name: papermc_service_session
+        aws-region: sa-east-1
+
+    - name: Deploy SPA to Amazon S3
+      run: |
+        aws s3 sync ./build/ s3://papermc-spa-bucket-bdjkgsmjkycv --acl public-read
+        aws cloudfront create-invalidation --distribution-id your-cloudfront-distribution-id --paths "/*"
+
+    - name: Deploy serverless function
+      run: |
+        cd serverless-function
+        npm install
+        npm run deploy
